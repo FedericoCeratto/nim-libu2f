@@ -1,0 +1,32 @@
+
+### FIDO U2F server-side and client-side library wrapper for Nim
+
+image:https://circleci.com/gh/FedericoCeratto/nim-libu2f.svg?style=svg["CircleCI", link="https://circleci.com/gh/FedericoCeratto/nim-libu2f"]
+
+Look at the interactive_functional_test.nim file for an usage example.
+
+Generated docs:
+https://FedericoCeratto.github.io/nim-libu2f/docs/0.1.0/src/libu2f_host.html[host]
+https://FedericoCeratto.github.io/nim-libu2f/docs/0.1.0/src/libu2f_server.html[server]
+
+Install:
+[source,bash]
+----
+nimble install libu2f
+----
+
+Install dependencies (on Debian and Ubuntu):
+[source,bash]
+----
+sudo apt-get install libu2f-host0 libu2f-server0
+----
+
+Run tests:
+[source,bash]
+----
+# Run functional test
+nim c -r src/functional_test.nim
+
+# Run interactive test - you'll need an U2F key
+nim c -r src/interactive_functional_test.nim
+----
