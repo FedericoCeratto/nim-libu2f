@@ -16,14 +16,14 @@ type
     devs: pointer
     pdevs: ptr u2fh_devs
 
-  u2fh_rc* {.size: sizeof(cint).} = enum
-    U2FH_SIZE_ERROR = -8, U2FH_TIMEOUT_ERROR = -7,
-    U2FH_AUTHENTICATOR_ERROR = -6, U2FH_NO_U2F_DEVICE = -5,
-    U2FH_BASE64_ERROR = -4, U2FH_JSON_ERROR = -3,
-    U2FH_TRANSPORT_ERROR = -2, U2FH_MEMORY_ERROR = -1,
-    U2FH_OK = 0
+  u2fh_rc* {.pure, size: sizeof(cint).} = enum
+    SIZE_ERROR = -8, TIMEOUT_ERROR = -7,
+    AUTHENTICATOR_ERROR = -6, NO_U2F_DEVICE = -5,
+    BASE64_ERROR = -4, JSON_ERROR = -3,
+    TRANSPORT_ERROR = -2, MEMORY_ERROR = -1,
+    OK = 0
+  U2FHostError* = object of Exception
 
-  #u2fh_cmdflags = int
   u2fh_cmdflags {.size: sizeof(cint).} = enum
     NONE = 0, REQUEST_USER_PRESENCE = 1
 
@@ -34,10 +34,10 @@ proc u2fh_global_init*(flags: u2fh_initflags): u2fh_rc
 proc u2fh_global_done*()
   {.cdecl, importc: "u2fh_global_done", dynlib: lib_fn.}
 
-proc u2fh_strerror*(err: cint): cstring
+proc u2fh_strerror*(err: u2fh_rc): cstring
   {.cdecl, importc: "u2fh_strerror", dynlib: lib_fn.}
 
-proc u2fh_strerror_name*(err: cint): cstring
+proc u2fh_strerror_name*(err: u2fh_rc): cstring
   {.cdecl, importc: "u2fh_strerror_name", dynlib: lib_fn.}
 
 proc u2fh_devs_init*(devs: ptr ptr u2fh_devs): u2fh_rc
@@ -81,13 +81,15 @@ proc u2fh_is_alive*(devs: ptr u2fh_devs; index: cuint): cint
   {.cdecl, importc: "u2fh_is_alive", dynlib: lib_fn.}
 
 
-proc chk(outcode: u2fh_rc) =
-  if outcode != U2FH_OK:
-    raise newException(Exception, "U2F Error: $#" % $outcode)
+template chk(outcode: u2fh_rc) =
+  if outcode != u2fh_rc.OK:
+    let err_msg = $u2fh_strerror(outcode)
+    raise newException(U2FHostError, "U2F Error: $#" % $err_msg)
 
 # Exported procs
 
 proc newU2FHostCtx*(): U2FHostCtx =
+  ## Initialize U2F host context
   result = U2FHostCtx()
   chk u2fh_global_init(0)
   var nyan: ptr u2fh_devs
@@ -104,12 +106,14 @@ proc register*(ctx: U2FHostCtx, challenge, origin: string): string =
   return cstringArrayToSeq(response)[0]
 
 proc authenticate*(ctx: U2FHostCtx, challenge, origin: string): string =
-  ##
+  ## Authenticate
   var response: cstringArray = allocCStringArray(@[""])
   chk ctx.pdevs.u2fh_authenticate(challenge.cstring, origin.cstring, response,
     u2fh_cmdflags.REQUEST_USER_PRESENCE)
   let resp = cstringArrayToSeq(response)
-  if resp.len != 1:
-    echo "WRONG LEN"
-
+  assert resp.len == 1
   return resp[0]
+
+proc done*(ctx: U2FHostCtx) =
+  ## U2F host context destructor
+  ctx.pdevs.u2fh_devs_done()

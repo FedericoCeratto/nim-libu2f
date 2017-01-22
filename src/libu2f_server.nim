@@ -43,8 +43,10 @@ type
   u2fs_auth_res_t = int
   AuthenticationResponse = ptr u2fs_auth_res_t
   U2FServerCtx = ptr u2fs_ctx_t
+  KeyHandle* = string
+  PublicKey* = string
+  U2FLoginData* = tuple[key_handle: KeyHandle, public_key: PublicKey]
 
-# Must be called successfully before using any other functions.
 
 proc u2fs_global_init(flags: u2fs_initflags): u2fs_rc
   {.cdecl, importc: "u2fs_global_init", dynlib: lib_fn.}
@@ -121,7 +123,7 @@ proc u2fs_free_auth_res*(result: AuthenticationResponse)
   {.cdecl, importc: "u2fs_free_auth_res", dynlib: lib_fn.}
 
 
-proc chk(outcode: u2fs_rc) =
+template chk(outcode: u2fs_rc) =
   if outcode != u2fs_rc.OK:
     let err_msg = $u2fs_strerror(outcode)
     raise newException(U2FServerError, "U2F Error: $#" % $err_msg)
@@ -144,24 +146,16 @@ proc registration_challenge*(ctx: U2FServerCtx): string =
   let ret = $challenge
   return ret
 
-proc verify_registration*(ctx: U2FServerCtx, challenge: string): string =
-  ## Verify registration and return key handle
+proc verify_registration*(ctx: U2FServerCtx, challenge: string): U2FLoginData =
+  ## Verify registration and return key handle and public key.
+  ## Store them on the server and they will be needed to authenticate.
   const bufsize = 2048
   var output: RegistrationResponse = create(u2fs_reg_res_t, bufsize)
   let u2fresponse = challenge.cstring
   chk ctx.u2fs_registration_verify(u2fresponse.cstring, addr output)
-  let key_handle = $u2fs_get_registration_keyHandle(output)
-  return key_handle
-
-proc verify_registration2*(ctx: U2FServerCtx, challenge: string): (string, string) =
-  ## Verify registration and return key handle and public key
-  const bufsize = 2048
-  var output: RegistrationResponse = create(u2fs_reg_res_t, bufsize)
-  let u2fresponse = challenge.cstring
-  chk ctx.u2fs_registration_verify(u2fresponse.cstring, addr output)
-  let key_handle = $u2fs_get_registration_keyHandle(output)
+  let key_handle: KeyHandle = $u2fs_get_registration_keyHandle(output)
   let pkc = u2fs_get_registration_publicKey(output)
-  var pk = newString(U2FS_PUBLIC_KEY_LEN)
+  var pk: PublicKey = newString(U2FS_PUBLIC_KEY_LEN)
   copyMem(addr pk[0], pkc, U2FS_PUBLIC_KEY_LEN)
   return (key_handle, pk)
 
@@ -197,5 +191,5 @@ proc set_key_handle*(ctx: U2FServerCtx, key_handle: string) =
   chk ctx.u2fs_set_keyHandle(key_handle.cstring)
 
 proc done*(ctx: U2FServerCtx) =
-  ## Ctx destructor
+  ## U2F server context destructor
   ctx.u2fs_done()

@@ -1,5 +1,5 @@
 #
-# Nim libu2f - functional tests
+# Nim libu2f - interactive server and host functional tests
 #
 # Copyright 2017 Federico Ceratto <federico.ceratto@gmail.com>
 # Released under LGPLv3 License, see LICENSE file
@@ -9,6 +9,8 @@ import strutils, unittest
 import os, json
 import tables
 
+from functional_test import check_format, fromHex
+
 import libu2f_host
 import libu2f_server
 
@@ -16,24 +18,9 @@ const
   origin = "http://127.0.0.1:5000"
   app_id = "http://127.0.0.1:5000"
 
-proc check_format(msg: string, checks: openArray[(string, int)]) =
-  ## Check keys and values len
-  let j = parseJson(msg)
-  for c in checks:
-    let (name, length) = c
-    if not j.hasKey(name):
-      echo "Warning: key '$#' is missing" % name
-    elif length != -1 and j[name].str.len != length:
-      echo "Warning: key '$#' has len $# - expected $#" % [name,
-        $j[name].str.len, $length]
-
-  if j.len > checks.len:
-    echo "Warning: extra keys in msg:"
-    echo $msg
-    echo "---"
 
 
-suite "Functional test":
+suite "Interactive functional test":
 
   # Initialization
 
@@ -43,7 +30,8 @@ suite "Functional test":
 
   var msg = ""
   var msg2 = ""
-  var key_handle = ""
+  var login_data: U2FLoginData
+  var login_data2: U2FLoginData
 
   # Registration using 2 server contexts
 
@@ -79,34 +67,44 @@ suite "Functional test":
     assert j["clientData"] != j2["clientData"]
 
   test "Server: Verify registration":
-    key_handle = srv_ctx.verify_registration(msg)
+    login_data = srv_ctx.verify_registration(msg)
 
   test "Server: Verify registration":
-    key_handle = srv_ctx2.verify_registration(msg2)
-
+    login_data2 = srv_ctx2.verify_registration(msg2)
 
 
   # Login
 
   test "Server: Generate login challenge":
-    msg = srv_ctx.generate_authentication_challenge(key_handle)
+    msg = srv_ctx.generate_authentication_challenge(login_data.key_handle)
     check_format(msg, {"keyHandle": 86, "version": 6, "challenge": 43, "appId": 21})
+
+  test "Server: Generate login challenge":
+    msg2 = srv_ctx2.generate_authentication_challenge(login_data.key_handle)
+    check_format(msg2, {"keyHandle": 86, "version": 6, "challenge": 43, "appId": 21})
+
 
   test "Host: Respond to login challenge":
     echo "Press now!"
     msg = host_ctx.authenticate(msg, origin)
 
-  # signatureData clientData keyHandle
+  test "Host: Respond to login challenge":
+    echo "Press now!"
+    msg2 = host_ctx.authenticate(msg2, origin)
+
 
   test "Server: Verify login":
+    srv_ctx.set_public_key(login_data.public_key)
     srv_ctx.verify_authentication(msg)
 
   test "Server: Verify login":
-    srv_ctx.verify_authentication(msg)
+    srv_ctx2.set_public_key(login_data.public_key)
+    srv_ctx2.verify_authentication(msg2)
+
 
   test "Destructors":
     srv_ctx.done()
     srv_ctx2.done()
-    #host_ctx.done()
+    host_ctx.done()
 
   echo "Test done."

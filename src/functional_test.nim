@@ -1,5 +1,5 @@
 #
-# Nim libu2f - functional tests
+# Nim libu2f - server side functional tests
 #
 # Copyright 2017 Federico Ceratto <federico.ceratto@gmail.com>
 # Released under LGPLv3 License, see LICENSE file
@@ -15,14 +15,14 @@ const
   origin = "http://demo.yubico.com"
   app_id = "http://demo.yubico.com"
 
-proc check_format(msg: string, checks: openArray[(string, int)]) =
-  ##
+proc check_format*(msg: string, checks: openArray[(string, int)]) =
+  ## Check keys and values len
   let j = parseJson(msg)
   for c in checks:
     let (name, length) = c
     if not j.hasKey(name):
       echo "Warning: key '$#' is missing" % name
-    elif j[name].str.len != length:
+    elif length != -1 and j[name].str.len != length:
       echo "Warning: key '$#' has len $# - expected $#" % [name,
         $j[name].str.len, $length]
 
@@ -36,7 +36,7 @@ proc hexDump(s: string | cstring): string =
   for c in s:
     result.add toHex(ord(c), 2)
 
-proc fromHex(s: string): string =
+proc fromHex*(s: string): string =
   result = newString(s.len div 2)
   for p in 0..result.len:
     let i = s[p*2..(p*2 + 1)].parseHexInt
@@ -71,14 +71,14 @@ suite "Functional test":
       expected_pubkey = "045C6DD1383C71916895132BD858E06AD7FE365AE5E5A08C92BA21FC1ECEB9DD1EF422ED042D600DAA020E0DADE6CD9120A83B02745753F32E53F55ABFCE92EFF4"
 
     srv_ctx.set_challenge challenge
-    let (key_handle, public_key) = srv_ctx.verify_registration2(reg_resp)
+    let login_data = srv_ctx.verify_registration(reg_resp)
 
-    assert key_handle == expected_key_handle
-    assert public_key.hexDump == expected_pubkey
+    assert login_data.key_handle == expected_key_handle
+    assert login_data.public_key.hexDump == expected_pubkey
 
     expect U2FServerError:
       srv_ctx.set_challenge "YS19nu_YYjgs29ZwkSwQobr78OiDWFz1yqYeo9YJfBB" # Wrong challenge
-      discard srv_ctx.verify_registration2(reg_resp)
+      discard srv_ctx.verify_registration(reg_resp)
 
 
   # Login
@@ -111,5 +111,7 @@ suite "Functional test":
     srv_ctx.set_public_key(fromHex(pub_key))
     srv_ctx.verify_authentication(resp)
 
+  test "Destructors":
+    srv_ctx.done()
 
   echo "Test done."
