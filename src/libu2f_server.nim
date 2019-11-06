@@ -159,7 +159,7 @@ proc verify_registration*(ctx: U2FServerCtx, challenge: string): U2FLoginData =
   copyMem(addr pk[0], pkc, U2FS_PUBLIC_KEY_LEN)
   return (key_handle, pk)
 
-template cpt(target: string): expr =
+template cpt(target: string): untyped =
   cast[ptr cuchar](cstring(target))
 
 proc set_public_key*(ctx: U2FServerCtx, public_key: string) =

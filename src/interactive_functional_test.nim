@@ -9,7 +9,7 @@ import strutils, unittest
 import os, json
 import tables
 
-from functional_test import check_format, fromHex
+from functional_test import check_format
 
 import libu2f_host
 import libu2f_server

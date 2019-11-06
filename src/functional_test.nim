@@ -31,18 +31,6 @@ proc check_format*(msg: string, checks: openArray[(string, int)]) =
     echo $msg
     echo "---"
 
-proc hexDump(s: string | cstring): string =
-  result = newStringOfCap(s.len * 2)
-  for c in s:
-    result.add toHex(ord(c), 2)
-
-proc fromHex*(s: string): string =
-  result = newString(s.len div 2)
-  for p in 0..result.len:
-    let i = s[p*2..(p*2 + 1)].parseHexInt
-    result[p] = chr(i)
-
-
 
 suite "Functional test":
 
@@ -51,9 +39,6 @@ suite "Functional test":
   let srv_ctx = newU2FServerCtx(app_id, origin)
 
   # Registration
-
-  test "hex":
-    assert "00112233fF".fromHex.hexDump == "00112233FF"
 
   test "Server: Create registration challenge":
     let msg = srv_ctx.registration_challenge()
@@ -74,7 +59,7 @@ suite "Functional test":
     let login_data = srv_ctx.verify_registration(reg_resp)
 
     assert login_data.key_handle == expected_key_handle
-    assert login_data.public_key.hexDump == expected_pubkey
+    assert login_data.public_key.toHex == expected_pubkey
 
     expect U2FServerError:
       srv_ctx.set_challenge "YS19nu_YYjgs29ZwkSwQobr78OiDWFz1yqYeo9YJfBB" # Wrong challenge
@@ -108,7 +93,7 @@ suite "Functional test":
       # Public key not set
       srv_ctx.verify_authentication(resp)
 
-    srv_ctx.set_public_key(fromHex(pub_key))
+    srv_ctx.set_public_key(parseHexStr(pub_key))
     srv_ctx.verify_authentication(resp)
 
   test "Destructors":
